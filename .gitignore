@@ -1,0 +1,32 @@
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary / backup files
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
+*.rej
+
+# Local diagnostics and transfer artifacts
+*_DIAGNOSTIC_*
+*_FULL_A.*
+*_FULL_B.*
+*_FULL_C.*
+*_FULL_D.*
+*.zip
+
+# Local logs / secrets
+*.log
+.env
+.env.*
