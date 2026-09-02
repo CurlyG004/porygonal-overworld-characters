@@ -1,7 +1,7 @@
 {
   "id": "PORYGONAL_OVERWORLD_CHARACTERS",
   "name": "Porygonal - Overworld Characters",
-  "version": "0.0.2",
+  "version": "0.6.1",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",
@@ -18,5 +18,6 @@
     "engine_internals"
   ],
   "affects_link": false,
+  "github": "CurlyG004/porygonal-overworld-characters",
   "description": "Replaces overworld character sprites with custom 3D models."
 }
