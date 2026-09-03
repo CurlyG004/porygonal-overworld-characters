@@ -1,35 +1,32 @@
-local DramalessShape = {}
+local DramaticShapeAdapter = {}
 
-----------------------------------------------------------------
--- Porygonal - Dramaless Shape renderer adapter
---
--- Compatibility adapter for DRAMALESS_SHAPE 2.0.3.
---
--- Dramaless Shape retains the core VoxelScene / Voxel3D /
--- SpriteBillboards / ShadowMap / FirstPerson surfaces used by the
--- validated Dramatic Shape adapter. This adapter intentionally starts
--- from that proven integration strategy rather than using the Voxel
--- Companion API, because Companion API v1 is additive and does not
--- provide ownership/replacement of the host's ordinary actor pass.
---
--- Runtime-validated integration; see DRAMALESS_SHAPE_README.txt for tested scope.
-----------------------------------------------------------------
+DramaticShapeAdapter.info = {
+    adapterVersion = "1.0.0",
+
+    targetMod = {
+        id = "DRAMATIC_SHAPE",
+        name = "Dramatic Shape Voxel Mod",
+        validatedVersion = "1.8.2",
+    },
+
+    porygonalVersion = "0.6.2",
+}
 
 
 ----------------------------------------------------------------
--- Detect Dramaless Shape
+-- Detect Dramatic Shape
 --
 -- Detection only.
 -- No hooks or runtime modifications are installed here.
 ----------------------------------------------------------------
 
-function DramalessShape.detect(
+function DramaticShapeAdapter.detect(
     mod
 )
 
     local ds =
         mod.find(
-            "DRAMALESS_SHAPE"
+            "DRAMATIC_SHAPE"
         )
 
 
@@ -51,7 +48,7 @@ function DramalessShape.detect(
 end
 
 
-function DramalessShape.initialize(
+function DramaticShapeAdapter.initialize(
     mod,
     loadLocalModule,
     Registry,
@@ -59,17 +56,17 @@ function DramalessShape.initialize(
 )
 
     ----------------------------------------------------------------
-    -- Find Dramaless Shape
+    -- Find Dramatic Shape
     ----------------------------------------------------------------
 
     local ds =
-        mod.find("DRAMALESS_SHAPE")
+        mod.find("DRAMATIC_SHAPE")
 
 
     if not ds then
 
         mod.log:info(
-            "Dramaless Shape not installed"
+            "Dramatic Shape not installed"
         )
 
         return false
@@ -82,7 +79,7 @@ function DramalessShape.initialize(
     ) then
 
         mod.log:error(
-            "Dramaless Shape API unavailable"
+            "Dramatic Shape API unavailable"
         )
 
         return false
@@ -90,7 +87,7 @@ function DramalessShape.initialize(
 
 
     ----------------------------------------------------------------
-    -- Dramaless Shape modules
+    -- Dramatic Shape modules
     ----------------------------------------------------------------
 
     local V =
@@ -142,7 +139,7 @@ function DramalessShape.initialize(
     -- The runtime interprets character assets into renderer-agnostic
     -- packages (geometry + ImageData + Gen1 pose semantics).
     --
-    -- This renderer alone converts those packages into Dramaless Shape
+    -- This renderer alone converts those packages into Dramatic Shape
     -- GPU resources.
     ----------------------------------------------------------------
 
@@ -161,7 +158,7 @@ function DramalessShape.initialize(
 
 
     ----------------------------------------------------------------
-    -- Dramaless Shape GPU resource cache
+    -- Dramatic Shape GPU resource cache
     --
     -- Renderer-agnostic data stays in character_runtime.lua.
     -- Voxel3D meshes and Love2D Images stay here.
@@ -239,7 +236,7 @@ function DramalessShape.initialize(
 
 
     ----------------------------------------------------------------
-    -- Dramaless Shape / Love2D texture realization
+    -- Dramatic Shape / Love2D texture realization
     ----------------------------------------------------------------
 
     local function textureFor(
@@ -302,7 +299,7 @@ function DramalessShape.initialize(
 
 
     ----------------------------------------------------------------
-    -- Load and realize one asset for Dramaless Shape
+    -- Load and realize one asset for Dramatic Shape
     ----------------------------------------------------------------
 
     local function loadAsset(
@@ -452,7 +449,7 @@ function DramalessShape.initialize(
     -- COMPAT: RECOMP 0.1.99
     --
     -- Integration introduced for Recomp 0.1.99.
-    -- Uses observable/public Dramaless Shape module surfaces and 3D
+    -- Uses observable/public Dramatic Shape module surfaces and 3D
     -- shadow casters. No private-function upvalue hooks are used.
     ----------------------------------------------------------------
 
@@ -478,49 +475,14 @@ function DramalessShape.initialize(
             ShadowMap.draw
 
 
-        local originalBeginOverlay =
-            Voxel3D.beginOverlay
-
-
-        local originalEndOverlay =
-            Voxel3D.endOverlay
-
-
-        local originalEndScene =
-            Voxel3D.endScene
-
-
-        ------------------------------------------------------------
-        -- Validate every surface needed by the modern profile BEFORE
-        -- installing any wrapper. A failed initialization must not leave
-        -- partial mutations behind.
-        ------------------------------------------------------------
-
-        if type(originalVoxelRender) ~= "function"
-            or type(originalVoxelDraw) ~= "function"
-            or type(originalBillboardMesh) ~= "function"
-            or type(originalShadowQuad) ~= "function"
-            or type(originalShadowDraw) ~= "function"
-            or type(originalBeginOverlay) ~= "function"
-            or type(originalEndOverlay) ~= "function"
-            or type(originalEndScene) ~= "function" then
-
-            mod.log:error(
-                "Dramaless Shape adapter: modern compatibility surfaces unavailable"
-            )
-
-            return false
-        end
-
-
         ------------------------------------------------------------
         -- PORYGONAL FLY STATE
         --
         -- Visual offsets / trajectory timings are read through Registry
         -- from character_tuning.lua and are not owned by this renderer.
         --
-        -- Fly is not a normal Dramaless Shape character pose. Recomp
-        -- draws a dedicated 2D bird FX while Dramaless Shape removes
+        -- Fly is not a normal Dramatic Shape character pose. Recomp
+        -- draws a dedicated 2D bird FX while Dramatic Shape removes
         -- the player from its normal pose list.
         --
         -- Porygonal keeps its own small state machine across the map
@@ -534,22 +496,6 @@ function DramalessShape.initialize(
 
         local originalLoveDraw =
             love.graphics.draw
-
-
-        ------------------------------------------------------------
-        -- Dramaless composites field FX inside Voxel3D.beginOverlay() /
-        -- endOverlay(), after VoxelScene.render has returned.
-        --
-        -- Keep the latest OverworldState and a narrowly scoped overlay flag
-        -- so fishing/Fly filtering only applies during that exact FX pass.
-        ------------------------------------------------------------
-
-        local latestWorldState =
-            nil
-
-
-        local fieldFxOverlayActive =
-            false
 
 
         local flyState = {
@@ -764,74 +710,6 @@ function DramalessShape.initialize(
         end
 
 
-        ----------------------------------------------------------------
-        -- Scoped field-FX interception.
-        --
-        -- Dramaless main.lua calls:
-        --
-        --     Voxel3D.beginOverlay()
-        --     ctx.drawFx(...)
-        --     Voxel3D.endOverlay()
-        --
-        -- We use that renderer-owned semantic boundary instead of filtering
-        -- every Love2D draw globally.
-        ----------------------------------------------------------------
-
-        Voxel3D.beginOverlay =
-            function(
-                ...
-            )
-
-                local result =
-                    originalBeginOverlay(
-                        ...
-                    )
-
-
-                fieldFxOverlayActive =
-                    result
-                    and true
-                    or false
-
-
-                return result
-            end
-
-
-        Voxel3D.endOverlay =
-            function(
-                ...
-            )
-
-                ------------------------------------------------------------
-                -- Clear the scope even if endOverlay itself errors.
-                ------------------------------------------------------------
-
-                local ok,
-                      a,
-                      b,
-                      c =
-                    pcall(
-                        originalEndOverlay,
-                        ...
-                    )
-
-
-                fieldFxOverlayActive =
-                    false
-
-
-                if not ok then
-                    error(a)
-                end
-
-
-                return a,
-                       b,
-                       c
-            end
-
-
         if type(originalLoveDraw)
             == "function" then
 
@@ -841,115 +719,84 @@ function DramalessShape.initialize(
                     ...
                 )
 
-                    local state =
-                        latestWorldState
+
+    
 
 
-                    if fieldFxOverlayActive
-                        and state then
 
-                        ----------------------------------------------------
-                        -- Fishing:
-                        -- suppress only the exact cached native rod image.
-                        ----------------------------------------------------
-
-                        local fishing =
-                            state.fishing
-                            and true
-                            or false
+     
 
 
-                        local rodImage =
-                            fishing
-                            and state.rodImg
-                            or nil
+                    if flyState.mode
+                        ~= "normal" then
+
+                        local imageW,
+                              imageH =
+                            flySafeDimensions(
+                                drawable
+                            )
 
 
-                        if rodImage
-                            and drawable == rodImage then
+                        if imageW == 16
+                            and imageH == 96 then
 
-                            return
-                        end
-
-
-                        ----------------------------------------------------
-                        -- Fly:
-                        -- identify the native bird sheet once, then reject
-                        -- only that exact Image's Fly frames.
-                        ----------------------------------------------------
-
-                        local flyActive =
-                            flyState.mode
-                            ~= "normal"
-                            or state.flyAnim
-                            or state.flyArrive
+                            local args =
+                                {...}
 
 
-                        if flyActive then
-
-                            local imageW,
-                                  imageH =
-                                flySafeDimensions(
-                                    drawable
+                            local qx,
+                                  qy,
+                                  qw,
+                                  qh =
+                                flySafeViewport(
+                                    args[1]
                                 )
 
 
-                            if imageW == 16
-                                and imageH == 96 then
-
-                                local args =
-                                    {...}
-
-
-                                local qx,
-                                      qy,
-                                      qw,
-                                      qh =
-                                    flySafeViewport(
-                                        args[1]
-                                    )
+                            local isFlyingFrame =
+                                qx == 0
+                                and qw == 16
+                                and qh == 16
+                                and (
+                                    qy == 32
+                                    or qy == 80
+                                )
 
 
-                                local isFlyingFrame =
-                                    qx == 0
-                                    and qw == 16
-                                    and qh == 16
-                                    and (
-                                        qy == 32
-                                        or qy == 80
-                                    )
+                            if flyState.captureBird
+                                and not flyState.birdImage
+                                and isFlyingFrame then
+
+                                flyState.birdImage =
+                                    drawable
 
 
-                                if flyState.captureBird
-                                    and not flyState.birdImage
-                                    and isFlyingFrame then
-
-                                    flyState.birdImage =
-                                        drawable
+                                flyState.captureBird =
+                                    false
+                            end
 
 
-                                    flyState.captureBird =
-                                        false
-                                end
+                            local isNativeBird =
+                                flyState.birdImage
+                                and drawable
+                                    == flyState.birdImage
+                                and qx == 0
+                                and qw == 16
+                                and qh == 16
+                                and (
+                                    qy == 0
+                                    or qy == 32
+                                    or qy == 80
+                                )
 
 
-                                local isNativeBird =
-                                    flyState.birdImage
-                                    and drawable
-                                        == flyState.birdImage
-                                    and qx == 0
-                                    and qw == 16
-                                    and qh == 16
-                                    and (
-                                        qy == 0
-                                        or qy == 32
-                                        or qy == 80
-                                    )
+                            if isNativeBird then
 
+                                ------------------------------------------------
+                                -- Skip only the exact native Fly bird Image.
+                                ------------------------------------------------
 
-                                if isNativeBird then
-                                    return
-                                end
+                                return
                             end
                         end
                     end
@@ -962,6 +809,19 @@ function DramalessShape.initialize(
                 end
         end
 
+
+        if type(originalVoxelRender) ~= "function"
+            or type(originalVoxelDraw) ~= "function"
+            or type(originalBillboardMesh) ~= "function"
+            or type(originalShadowQuad) ~= "function"
+            or type(originalShadowDraw) ~= "function" then
+
+            mod.log:error(
+                "Dramatic Shape adapter: Recomp 0.1.99 compatibility surfaces unavailable"
+            )
+
+            return false
+        end
 
 
         ----------------------------------------------------------------
@@ -1014,7 +874,7 @@ function DramalessShape.initialize(
         )
 
             ------------------------------------------------------------
-            -- Player + Dramaless Shape free camera:
+            -- Player + Dramatic Shape free camera:
             -- use the continuous body orientation.
             ------------------------------------------------------------
 
@@ -1474,7 +1334,7 @@ function DramalessShape.initialize(
 
         ----------------------------------------------------------------
         -- shadowQuad was assigned to the original mesh function when
-        -- Dramaless Shape loaded. Wrap it separately so the FIRST shadow
+        -- Dramatic Shape loaded. Wrap it separately so the FIRST shadow
         -- pass of a fresh session is identifiable too.
         ----------------------------------------------------------------
 
@@ -1535,136 +1395,6 @@ function DramalessShape.initialize(
 
 
             return ctx.visible
-        end
-
-
-        ----------------------------------------------------------------
-        -- Dramaless Shape visible-draw -> pose association.
-        --
-        -- Dramaless 2.0.x applies withinRenderDistance() inside drawCast.
-        -- That means not every captured pose produces a visible billboard
-        -- draw. A simple sequential draw index can therefore drift and make
-        -- the adapter fall back to the original flat cards.
-        --
-        -- The incoming billboard model matrix contains enough information
-        -- to recover the entity's original px/py exactly:
-        --
-        --   px = model[4]  - 8 + 8 * model[1]
-        --   py = model[12] - 8 + 8 * model[9]
-        --
-        -- Match by BOTH sprite definition and recovered world position.
-        -- This also remains stable when the same sprite definition is used
-        -- by several NPCs and when drawCast is repeated for water reflection.
-        ----------------------------------------------------------------
-
-        local function poseForVisibleBillboard(
-            ctx,
-            info,
-            model
-        )
-
-            if not ctx
-                or not info
-                or type(model) ~= "table" then
-
-                return nil
-            end
-
-
-            local m1 =
-                model[1]
-
-            local tx =
-                model[4]
-
-            local m9 =
-                model[9]
-
-            local tz =
-                model[12]
-
-
-            if type(m1) ~= "number"
-                or type(tx) ~= "number"
-                or type(m9) ~= "number"
-                or type(tz) ~= "number" then
-
-                return nil
-            end
-
-
-            local drawPx =
-                tx
-                - 8
-                + 8 * m1
-
-
-            local drawPy =
-                tz
-                - 8
-                + 8 * m9
-
-
-            local best =
-                nil
-
-            local bestDistance =
-                nil
-
-
-            for _, p in ipairs(
-                visiblePoses(ctx)
-            ) do
-
-                if p
-                    and p.sprite
-                    and p.sprite.def
-                    and p.sprite.def == info.def then
-
-                    local dx =
-                        (p.px or 0)
-                        - drawPx
-
-
-                    local dz =
-                        (p.py or 0)
-                        - drawPy
-
-
-                    local distance =
-                        dx * dx
-                        + dz * dz
-
-
-                    if bestDistance == nil
-                        or distance < bestDistance then
-
-                        best =
-                            p
-
-                        bestDistance =
-                            distance
-                    end
-                end
-            end
-
-
-            ------------------------------------------------------------
-            -- A billboard transform recovered from the exact draw should
-            -- coincide with its captured pose. Keep a small tolerance for
-            -- floating-point camera/yaw arithmetic, otherwise preserve the
-            -- renderer's native fallback.
-            ------------------------------------------------------------
-
-            if best
-                and bestDistance
-                and bestDistance <= 0.01 then
-
-                return best
-            end
-
-
-            return nil
         end
 
 
@@ -3072,48 +2802,6 @@ function DramalessShape.initialize(
         end
 
 
-        ----------------------------------------------------------------
-        -- GUARANTEED DRAMALESS FLY VISIBLE INSERTION
-        --
-        -- An earlier approach used the grass mesh as a post-reflection anchor.
-        -- Carmin-sur-Mer exposed the flaw: grass is map content, therefore
-        -- it is not guaranteed to exist.
-        --
-        -- Voxel3D.endScene() is the real renderer lifecycle boundary:
-        -- it executes for the main world scene, never for the internal
-        -- water-reflection copy, and 3D submission is still valid
-        -- immediately before the original endScene() call.
-        --
-        -- Fly is therefore injected once, immediately before endScene().
-        ----------------------------------------------------------------
-
-        Voxel3D.endScene =
-            function(
-                ...
-            )
-
-                local ctx =
-                    renderContext
-
-
-                if ctx
-                    and ctx.flyActive
-                    and not ctx.flyVisibleDrawn then
-
-                    ctx.flyVisibleDrawn =
-                        true
-
-
-                    drawFlyVisible()
-                end
-
-
-                return originalEndScene(
-                    ...
-                )
-            end
-
-
         local function drawFlyShadow()
 
             local draws =
@@ -3311,6 +2999,19 @@ function DramalessShape.initialize(
                 -- until Porygonal's landing has completed.
                 --------------------------------------------------------
 
+                if ctx
+                    and ctx.flyActive
+                    and sunModel ~= nil
+                    and not ctx.flyVisibleDrawn then
+
+                    ctx.flyVisibleDrawn =
+                        true
+
+
+                    drawFlyVisible()
+                end
+
+
                 --------------------------------------------------------
                 -- Authored FIGURE replacement.
                 --
@@ -3362,33 +3063,63 @@ function DramalessShape.initialize(
                     and ctx
                     and sunModel ~= nil then
 
-                    local p =
-                        poseForVisibleBillboard(
-                            ctx,
-                            info,
-                            model
+                    local poses =
+                        visiblePoses(
+                            ctx
                         )
 
 
-                    if p then
-
-                        if ctx.flyActive
-                            and p.isPlayer then
-
-                            ------------------------------------------------
-                            -- Do not let the normal player reappear between
-                            -- departure, map transition and Porygonal landing.
-                            ------------------------------------------------
-
-                            return
-                        end
+                    local count =
+                        #poses
 
 
-                        if drawPorygonal(
-                            p
-                        ) then
+                    if count > 0 then
 
-                            return
+                        ctx.characterDrawIndex =
+                            (ctx.characterDrawIndex or 0)
+                            + 1
+
+
+                        local poseIndex =
+                            (
+                                (
+                                    ctx.characterDrawIndex
+                                    - 1
+                                )
+                                % count
+                            )
+                            + 1
+
+
+                        local p =
+                            poses[
+                                poseIndex
+                            ]
+
+
+                        if p
+                            and p.sprite
+                            and p.sprite.def
+                            and p.sprite.def == info.def then
+
+                            if ctx.flyActive
+                                and p.isPlayer then
+
+                                ------------------------------------------------
+                                -- Do not let the normal player reappear between
+                                -- departure, map transition and Porygonal landing.
+                                ------------------------------------------------
+
+                                return
+                            end
+
+
+                            if drawPorygonal(
+                                p
+                            ) then
+
+                                return
+                            end
                         end
                     end
                 end
@@ -3420,16 +3151,6 @@ function DramalessShape.initialize(
                 paletteFor,
                 eyes
             )
-
-                --------------------------------------------------------
-                -- Keep the current state after VoxelScene.render returns:
-                -- Dramaless runs ctx.drawFx in the overlay immediately after
-                -- this call, outside renderContext.
-                --------------------------------------------------------
-
-                latestWorldState =
-                    state
-
 
                 --------------------------------------------------------
                 -- Porygonal Fly state machine.
@@ -3716,7 +3437,7 @@ function DramalessShape.initialize(
 
 
                 --------------------------------------------------------
-                -- Ghost entities first, matching Dramaless Shape posesOf().
+                -- Ghost entities first, matching Dramatic Shape posesOf().
                 --------------------------------------------------------
 
                 for _, ghost in ipairs(
@@ -3765,7 +3486,7 @@ function DramalessShape.initialize(
                 --
                 -- The seated man is not a normal state.entities NPC.
                 -- In tested Pokémon Centers (Viridian, Vermilion), he is
-                -- exposed by Dramaless Shape as the map's authored FIGURE.
+                -- exposed by Dramatic Shape as the map's authored FIGURE.
                 --
                 -- Therefore do NOT associate him with a nearby logical NPC.
                 -- In a Pokémon Center, when the current map exposes exactly
@@ -3882,7 +3603,7 @@ function DramalessShape.initialize(
 
 
                 --------------------------------------------------------
-                -- Let Dramaless Shape execute its normal renderer.
+                -- Let Dramatic Shape execute its normal renderer.
                 --------------------------------------------------------
 
                 local ok,
@@ -3971,7 +3692,7 @@ function DramalessShape.initialize(
             ~= "function" then
 
             mod.log:error(
-                "Dramaless Shape adapter: drawCast was not found"
+                "Dramatic Shape adapter: drawCast was not found"
             )
 
             return false
@@ -3981,7 +3702,7 @@ function DramalessShape.initialize(
         ----------------------------------------------------------------
         -- Track the exact pose currently passed through viewFacing()
         --
-        -- Dramaless Shape does:
+        -- Dramatic Shape does:
         --
         -- viewFacing(p)
         -- immediately followed by
@@ -4009,7 +3730,7 @@ function DramalessShape.initialize(
                 ~= "function" then
 
             mod.log:error(
-                "Dramaless Shape adapter: viewFacing was not found"
+                "Dramatic Shape adapter: viewFacing was not found"
             )
 
             return false
@@ -4039,7 +3760,7 @@ function DramalessShape.initialize(
         if not viewFacingResult then
 
             mod.log:error(
-                "Dramaless Shape adapter could not track current pose"
+                "Dramatic Shape adapter could not track current pose"
             )
 
             return false
@@ -4149,7 +3870,7 @@ function DramalessShape.initialize(
                 ~= "function" then
 
             mod.log:error(
-                "Dramaless Shape adapter: drawEntity was not found"
+                "Dramatic Shape adapter: drawEntity was not found"
             )
 
             return false
@@ -4173,7 +3894,7 @@ function DramalessShape.initialize(
         )
 
             ------------------------------------------------------------
-            -- `facing` may be Dramaless Shape viewFacing.
+            -- `facing` may be Dramatic Shape viewFacing.
             --
             -- currentPose.facing is the original world-facing.
             ------------------------------------------------------------
@@ -4298,7 +4019,7 @@ function DramalessShape.initialize(
 
             ----------------------------------------------------------------
             -- No 3D asset:
-            -- preserve Dramaless Shape's original 2D behaviour.
+            -- preserve Dramatic Shape's original 2D behaviour.
             ----------------------------------------------------------------
 
             return originalDrawEntity(
@@ -4331,7 +4052,7 @@ function DramalessShape.initialize(
         if not result then
 
             mod.log:error(
-                "Dramaless Shape adapter could not replace drawEntity"
+                "Dramatic Shape adapter could not replace drawEntity"
             )
 
             return false
@@ -4350,7 +4071,7 @@ function DramalessShape.initialize(
     if installCompat0199() then
 
         mod.log:info(
-            "Dramaless Shape Porygonal adapter installed"
+            "Dramatic Shape Porygonal adapter installed"
         )
 
         mod.log:info(
@@ -4369,7 +4090,7 @@ function DramalessShape.initialize(
     if installCompat0183() then
 
         mod.log:info(
-            "Dramaless Shape Porygonal adapter installed"
+            "Dramatic Shape Porygonal adapter installed"
         )
 
         mod.log:info(
@@ -4381,7 +4102,7 @@ function DramalessShape.initialize(
 
 
     mod.log:error(
-        "Dramaless Shape adapter: no compatible Recomp integration found"
+        "Dramatic Shape adapter: no compatible Recomp integration found"
     )
 
     return false
@@ -4389,4 +4110,4 @@ function DramalessShape.initialize(
 end
 
 
-return DramalessShape
+return DramaticShapeAdapter

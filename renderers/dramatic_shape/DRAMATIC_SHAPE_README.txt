@@ -1,132 +1,69 @@
-PORYGONAL - DRAMATIC SHAPE ADAPTER
-=================================
+PORYGONAL - DRAMATIC SHAPE RENDERER ADAPTER
+============================================
+
+Target Mod
+----------
+
+Name:
+    Dramatic Shape Voxel Mod
+
+Target Mod ID:
+    DRAMATIC_SHAPE
+
+Validated Mod Version:
+    1.8.2
+
+Porygonal Adapter:
+    renderers/dramatic_shape/dramatic_shape_adapter.lua
+
+Adapter Version:
+    1.0.0
+
 
 PURPOSE
 -------
 
-This file documents the Dramatic Shape adapter so contributors can understand
-its compatibility strategy before modifying it.
+This Renderer Adapter connects Porygonal - Overworld Characters to Dramatic
+Shape Voxel Mod.
 
-Implementation:
-    dramatic_shape_renderer.lua
+Dramatic Shape remains responsible for the 3D overworld. Porygonal replaces
+supported overworld character visuals through the adapter without taking
+ownership of the world renderer.
 
-Read:
-    ../README_RENDERERS.txt
 
-first for the general Porygonal renderer-adapter rules.
-
-DESIGN
-------
-
-The adapter integrates with Dramatic Shape through observable renderer
-surfaces where available.
-
-Important surfaces used by the mature compatibility path include:
-
-    VoxelScene.render
-    Voxel3D.draw
-    SpriteBillboards mesh/shadow behavior
-    ShadowMap.draw
-    scoped renderer/graphics behavior for special states
-
-The adapter associates renderer billboard/mesh identity with the Gen1
-character definition/frame, asks Porygonal's Registry for a replacement, then
-substitutes the Porygonal geometry at the actual visible/shadow draw surfaces.
-
-POSE SAFETY
------------
-
-Do not call pose evaluation an extra time.
-
-The adapter observes the renderer's existing pose work rather than independently
-evaluating game pose logic again.
-
-VISIBLE / SHADOW
-----------------
-
-Visible geometry and shadow replacement are separate paths.
-
-When debugging, prove them independently.
-
-PROCEDURAL IDLE
+VALIDATED SCOPE
 ---------------
 
-Porygonal idle motion is applied using adapter-observed actor motion and the
-renderer-independent tuning/Registry configuration.
+The adapter has been runtime-tested with Dramatic Shape Voxel Mod 1.8.2 for the
+normal overworld character path and the Porygonal character states currently
+supported by the project, including:
 
-Do not duplicate artistic idle values in this README or adapter when they
-belong in character_tuning.lua.
+    - player and NPC overworld characters;
+    - character shadows;
+    - bicycle and Surf character states;
+    - Fishing presentation;
+    - Fly presentation;
+    - authored overworld character figures.
 
-FLY
----
+The adapter keeps renderer-specific compatibility behavior isolated from
+Porygonal's character registry, tuning, palettes, and protected asset runtime.
 
-Fly is not assumed to be an ordinary player pose.
 
-The game/renderer can remove the player from its normal pose list while native
-Fly is active.
-
-The adapter therefore treats native Fly state as lifecycle information and
-maintains Porygonal's replacement Fly visuals across the transition.
-
-Do not add an extra player pose call to recover Fly state.
-
-FISHING
--------
-
-Fishing should be tested as both:
-
-    replacement character/model
-    native Fishing FX
-
-Do not assume ordinary walking success proves Fishing compatibility.
-
-AUTHORED POKEMON CENTER FIGURE
-------------------------------
-
-The seated Pokemon Center person may be renderer-authored geometry rather than
-a logical NPC.
-
-The adapter uses authored figure information and handles visible/shadow
-replacement separately.
-
-Do not associate this figure with ordinary NPC draw indexes.
-
-LEGACY COMPATIBILITY
---------------------
-
-Historical compatibility for older Dramatic Shape/Recomp behavior has required
-more fragile/private implementation knowledge.
-
-Treat legacy compatibility code conservatively.
-
-For new renderer versions:
-
-    prefer observable/public surfaces
-    inspect the exact source/version
-    do not copy private/upvalue assumptions forward automatically
-
-TEST CHECKLIST
+VERSION POLICY
 --------------
 
-[ ] ordinary player
-[ ] NPC
-[ ] visible models
-[ ] shadows
-[ ] idle
-[ ] bicycle
-[ ] Surf
-[ ] Fishing
-[ ] Fly departure
-[ ] Fly transition
-[ ] Fly landing
-[ ] Pokemon Center authored figure
-[ ] map diversity
-[ ] first-person/reflection behavior where applicable
+"Validated Mod Version" means the exact Target Mod version that was tested.
 
-CONTRIBUTOR NOTE
-----------------
+A different Dramatic Shape version may work, but compatibility should not be
+assumed until it has been tested. Adapter metadata can be viewed in:
 
-Before replacing a Dramatic Shape function, confirm that the exact supported
-version actually calls that function internally.
+    OPTION -> PORYGONAL
 
-An exported function name alone is not proof of dispatch ownership.
+
+OWNERSHIP
+---------
+
+Porygonal does not redistribute Dramatic Shape Voxel Mod.
+
+Dramatic Shape Voxel Mod is a separate project and remains subject to its own
+license and terms.

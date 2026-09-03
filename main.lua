@@ -224,6 +224,38 @@ local ok =
 
 if ok then
 
+    ----------------------------------------------------------------
+    -- Install Porygonal OPTION menu
+    ----------------------------------------------------------------
+
+    local PorygonalOptions =
+        loadLocalModule(
+            "ui/porygonal_options.lua"
+        )
+
+    if PorygonalOptions
+        and type(PorygonalOptions.install)
+            == "function" then
+
+        local uiOk,
+              uiResult =
+            pcall(
+                PorygonalOptions.install,
+                mod,
+                RendererManager
+            )
+
+        if not uiOk
+            or not uiResult then
+
+            mod.log:warn(
+                "Porygonal options UI could not be initialized: %s",
+                tostring(uiResult)
+            )
+        end
+    end
+
+
     mod.log:info(
         "Porygonal_Overworld_Characters loaded"
     )

@@ -1,7 +1,7 @@
 {
   "id": "PORYGONAL_OVERWORLD_CHARACTERS",
   "name": "Porygonal - Overworld Characters",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "api": 2,
   "entry": "main.lua",
   "profile": "content",

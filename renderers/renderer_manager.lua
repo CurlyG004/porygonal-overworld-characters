@@ -5,6 +5,13 @@
 --
 -- Contract expected from each renderer adapter:
 --
+--   Renderer.info (optional but recommended)
+--       adapterVersion
+--       targetMod.id
+--       targetMod.name
+--       targetMod.validatedVersion
+--       porygonalVersion
+--
 --   Renderer.detect(mod)
 --       -> true when the external renderer is present and its
 --          required public API is available.
@@ -26,6 +33,17 @@ local RendererManager = {}
 
 
 ----------------------------------------------------------------
+-- Active renderer adapter metadata
+----------------------------------------------------------------
+
+RendererManager.active = nil
+
+function RendererManager.getActive()
+    return RendererManager.active
+end
+
+
+----------------------------------------------------------------
 -- Renderer adapter candidates
 ----------------------------------------------------------------
 
@@ -33,17 +51,22 @@ local CANDIDATES = {
 
     {
         name = "PotatoVoxel",
-        path = "renderers/potato_voxel/potato_voxel_renderer.lua"
+        path = "renderers/potato_voxel/potato_voxel_adapter.lua"
     },
 
     {
         name = "Dramatic Shape",
-        path = "renderers/dramatic_shape/dramatic_shape_renderer.lua"
+        path = "renderers/dramatic_shape/dramatic_shape_adapter.lua"
     },
 
     {
         name = "Dramaless Shape",
-        path = "renderers/dramaless_shape/dramaless_shape_renderer.lua"
+        path = "renderers/dramaless_shape/dramaless_shape_adapter.lua"
+    },
+
+    {
+        name = "Battle Art Voxel",
+        path = "renderers/battle_art_voxel/battle_art_voxel_adapter.lua"
     }
 
 }
@@ -96,7 +119,8 @@ function RendererManager.initialize(
                     #compatible + 1
                 ] = {
                     name = candidate.name,
-                    adapter = adapter
+                    adapter = adapter,
+                    info = adapter.info
                 }
             end
         end
@@ -172,7 +196,7 @@ function RendererManager.initialize(
     if not ok then
 
         mod.log:error(
-            "%s renderer initialization failed: %s",
+            "%s renderer adapter initialization failed: %s",
             selected.name,
             tostring(initialized)
         )
@@ -184,7 +208,7 @@ function RendererManager.initialize(
     if not initialized then
 
         mod.log:error(
-            "%s renderer could not be initialized",
+            "%s renderer adapter could not be initialized",
             selected.name
         )
 
@@ -192,10 +216,48 @@ function RendererManager.initialize(
     end
 
 
-    mod.log:info(
-        "Porygonal renderer initialized: %s",
-        selected.name
-    )
+    RendererManager.active = {
+        name = selected.name,
+        adapter = selected.adapter,
+        info = selected.info
+    }
+
+
+    local info =
+        selected.info
+
+
+    if info
+        and type(info) == "table"
+        and type(info.targetMod) == "table" then
+
+        local adapterVersion =
+            info.adapterVersion
+            or "unknown"
+
+        local targetName =
+            info.targetMod.name
+            or selected.name
+
+        local validatedVersion =
+            info.targetMod.validatedVersion
+            or "unknown"
+
+
+        mod.log:info(
+            "Porygonal Renderer Adapter: %s | Adapter v%s | Validated with Mod v%s",
+            tostring(targetName),
+            tostring(adapterVersion),
+            tostring(validatedVersion)
+        )
+
+    else
+
+        mod.log:info(
+            "Porygonal Renderer Adapter initialized: %s",
+            selected.name
+        )
+    end
 
 
     return true

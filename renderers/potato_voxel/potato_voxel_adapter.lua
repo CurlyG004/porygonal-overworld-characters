@@ -1,19 +1,19 @@
 ----------------------------------------------------------------
--- Porygonal - PotatoVoxel renderer adapter
+-- Porygonal - PotatoVoxelAdapter renderer adapter
 --
 -- FIRST VISIBLE 3D COMPATIBILITY PASS
 --
--- Proven PotatoVoxel seam:
+-- Proven PotatoVoxelAdapter seam:
 --   SpriteBillboards.mesh -> Voxel3D.draw
 --
 -- This version:
---   * detects PotatoVoxel through its exported module API
---   * observes PotatoVoxel's own pose() calls (never calls pose twice)
+--   * detects PotatoVoxelAdapter through its exported module API
+--   * observes PotatoVoxelAdapter's own pose() calls (never calls pose twice)
 --   * associates visible billboard submissions with captured poses
 --   * resolves Porygonal identity through CharacterRuntime + Registry
 --   * loads/caches Porygonal meshes and palette textures lazily
 --   * replaces ordinary visible character billboards with true 3D meshes
---   * replaces PotatoVoxel character shadow cards with Porygonal 3D casters
+--   * replaces PotatoVoxelAdapter character shadow cards with Porygonal 3D casters
 --   * forwards the player's Fishing state to Registry lookup
 --   * suppresses only the native fishing-rod image during ctx.drawFx
 --   * runs Porygonal's authored 3D Fly choreography across map transition
@@ -28,14 +28,26 @@
 --   * first-person/free-camera refinements
 ----------------------------------------------------------------
 
-local PotatoVoxel = {}
+local PotatoVoxelAdapter = {}
+
+PotatoVoxelAdapter.info = {
+    adapterVersion = "1.0.0",
+
+    targetMod = {
+        id = "potato_voxel",
+        name = "PotatoVoxel",
+        validatedVersion = "1.9.6",
+    },
+
+    porygonalVersion = "0.6.2",
+}
 
 
 ----------------------------------------------------------------
 -- Detection: side-effect free
 ----------------------------------------------------------------
 
-function PotatoVoxel.detect(
+function PotatoVoxelAdapter.detect(
     mod
 )
 
@@ -129,17 +141,17 @@ end
 -- Initialization
 ----------------------------------------------------------------
 
-function PotatoVoxel.initialize(
+function PotatoVoxelAdapter.initialize(
     mod,
     loadLocalModule,
     Registry,
     CharacterRuntime
 )
 
-    if not PotatoVoxel.detect(mod) then
+    if not PotatoVoxelAdapter.detect(mod) then
 
         mod.log:error(
-            "PotatoVoxel compatibility API unavailable"
+            "PotatoVoxelAdapter compatibility API unavailable"
         )
 
         return false
@@ -151,7 +163,7 @@ function PotatoVoxel.initialize(
         or type(CharacterRuntime.textureDataFor) ~= "function" then
 
         mod.log:error(
-            "Porygonal CharacterRuntime API unavailable for PotatoVoxel"
+            "Porygonal CharacterRuntime API unavailable for PotatoVoxelAdapter"
         )
 
         return false
@@ -159,7 +171,7 @@ function PotatoVoxel.initialize(
 
 
     ----------------------------------------------------------------
-    -- PotatoVoxel modules
+    -- PotatoVoxelAdapter modules
     ----------------------------------------------------------------
 
     local potato =
@@ -222,7 +234,7 @@ function PotatoVoxel.initialize(
 
 
     ----------------------------------------------------------------
-    -- PotatoVoxel 1.9.6 authored POKECENTER figure repair.
+    -- PotatoVoxelAdapter 1.9.6 authored POKECENTER figure repair.
     --
     -- Exact 1.9.6 source has a malformed POKECENTER figure profile:
     --   6 tiles, but only 4 `under` entries.
@@ -268,7 +280,7 @@ function PotatoVoxel.initialize(
         end
 
         ------------------------------------------------------------
-        -- Same authored mask as PotatoVoxel 1.9.6, with the corrected
+        -- Same authored mask as PotatoVoxelAdapter 1.9.6, with the corrected
         -- six-tile `under` mapping used by the working Dramaless profile.
         ------------------------------------------------------------
 
@@ -450,7 +462,7 @@ function PotatoVoxel.initialize(
     ----------------------------------------------------------------
     -- Porygonal Fly state
     --
-    -- PotatoVoxel removes the normal player pose while Gen1Recomp's native
+    -- PotatoVoxelAdapter removes the normal player pose while Gen1Recomp's native
     -- Fly animation is active. Porygonal therefore owns a separate visual
     -- state machine that survives the map transition.
     --
@@ -849,7 +861,7 @@ function PotatoVoxel.initialize(
     -- GPU asset cache
     --
     -- CharacterRuntime owns renderer-independent geometry/ImageData.
-    -- PotatoVoxel GPU meshes and Love Images stay in this adapter.
+    -- PotatoVoxelAdapter GPU meshes and Love Images stay in this adapter.
     ----------------------------------------------------------------
 
     local gpuAssetCache =
@@ -1063,7 +1075,7 @@ function PotatoVoxel.initialize(
     ----------------------------------------------------------------
     -- Per-entity motion history for procedural idle.
     --
-    -- PotatoVoxel entity movement flags are not treated as authoritative
+    -- PotatoVoxelAdapter entity movement flags are not treated as authoritative
     -- here. We compare one captured world position to the next, matching
     -- the Dramaless adapter's validated idle behavior.
     ----------------------------------------------------------------
@@ -1146,7 +1158,7 @@ function PotatoVoxel.initialize(
     ----------------------------------------------------------------
     -- Observe one entity's EXISTING pose() call.
     --
-    -- PotatoVoxel owns the pose call. We only observe its return values.
+    -- PotatoVoxelAdapter owns the pose call. We only observe its return values.
     ----------------------------------------------------------------
 
     local function wrapEntityPose(
@@ -1554,7 +1566,7 @@ function PotatoVoxel.initialize(
     ----------------------------------------------------------------
     -- Authored Pokémon Center seated FIGURE.
     --
-    -- PotatoVoxel owns extraction of the figure from the furniture.
+    -- PotatoVoxelAdapter owns extraction of the figure from the furniture.
     -- Porygonal only replaces the resulting authored figure mesh.
     -- Resolution is lazy because Potato's auxiliary meshes may become
     -- available during its own render/prefetch lifecycle.
@@ -2441,7 +2453,7 @@ function PotatoVoxel.initialize(
     ----------------------------------------------------------------
     -- Porygonal 3D shadow caster.
     --
-    -- PotatoVoxel's character shadow pass uses the same billboard mesh
+    -- PotatoVoxelAdapter's character shadow pass uses the same billboard mesh
     -- identity captured above. Replace only that caster with the same
     -- Porygonal mesh/model used by the visible pass.
     ----------------------------------------------------------------
@@ -2594,11 +2606,11 @@ function PotatoVoxel.initialize(
     ----------------------------------------------------------------
     -- Visible character interception.
     --
-    -- The diagnostic proved that ordinary PotatoVoxel character cards:
+    -- The diagnostic proved that ordinary PotatoVoxelAdapter character cards:
     --   * are meshes produced by SpriteBillboards.mesh
     --   * reach Voxel3D.draw with a non-nil sunModel
     --
-    -- PotatoVoxel calls these visible characters in pose order. We use
+    -- PotatoVoxelAdapter calls these visible characters in pose order. We use
     -- the captured pose sequence and verify sprite.def before replacing.
     ----------------------------------------------------------------
 
@@ -2905,7 +2917,7 @@ function PotatoVoxel.initialize(
 
             ------------------------------------------------------------
             -- After authored landing + settle, hand the player back to
-            -- PotatoVoxel's ordinary character path.
+            -- PotatoVoxelAdapter's ordinary character path.
             ------------------------------------------------------------
 
             if flyState.mode == "landing" then
@@ -2979,7 +2991,7 @@ function PotatoVoxel.initialize(
 
 
             ------------------------------------------------------------
-            -- Ghosts first, matching PotatoVoxel's pose collection order.
+            -- Ghosts first, matching PotatoVoxelAdapter's pose collection order.
             ------------------------------------------------------------
 
             for _, ghost in ipairs(
@@ -3039,7 +3051,7 @@ function PotatoVoxel.initialize(
 
 
             ------------------------------------------------------------
-            -- Run PotatoVoxel normally.
+            -- Run PotatoVoxelAdapter normally.
             ------------------------------------------------------------
 
             local ok,
@@ -3089,11 +3101,11 @@ function PotatoVoxel.initialize(
 
 
     mod.log:info(
-        "Porygonal PotatoVoxel visible 3D + special-state compatibility initialized"
+        "Porygonal PotatoVoxelAdapter visible 3D + special-state compatibility initialized"
     )
 
     return true
 end
 
 
-return PotatoVoxel
+return PotatoVoxelAdapter
