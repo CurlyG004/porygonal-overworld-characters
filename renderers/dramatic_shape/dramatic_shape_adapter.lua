@@ -8,8 +8,6 @@ DramaticShapeAdapter.info = {
         name = "Dramatic Shape Voxel Mod",
         validatedVersion = "1.8.2",
     },
-
-    porygonalVersion = "0.6.2",
 }
 
 

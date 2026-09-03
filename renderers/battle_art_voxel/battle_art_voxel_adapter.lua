@@ -8,8 +8,6 @@ BattleArtVoxelAdapter.info = {
         name = "Battle Art Voxel Fork",
         validatedVersion = "1.10.1",
     },
-
-    porygonalVersion = "0.6.2",
 }
 ----------------------------------------------------------------
 -- Detect Battle Art Voxel

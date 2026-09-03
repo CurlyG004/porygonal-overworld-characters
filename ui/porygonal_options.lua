@@ -35,75 +35,18 @@ function PorygonalOptions.install(
 
                 local self = {
                     game = game,
-                    isOpaque = true,
-                    scroll = 1
+                    isOpaque = true
                 }
 
-                local function wrapWords(
-                    value,
-                    maxChars
-                )
+                function self:update(dt)
+                    if game.input:wasPressed("b")
+                        or game.input:wasPressed("a") then
 
-                    local source =
-                        text(
-                            value,
-                            "unknown"
-                        )
-
-                    local lines = {}
-                    local current = ""
-
-                    for word in string.gmatch(
-                        source,
-                        "%S+"
-                    ) do
-
-                        local candidate =
-                            current == ""
-                            and word
-                            or (
-                                current
-                                .. " "
-                                .. word
-                            )
-
-                        if #candidate
-                            <= maxChars then
-
-                            current =
-                                candidate
-
-                        else
-
-                            if current
-                                ~= "" then
-
-                                lines[
-                                    #lines + 1
-                                ] = current
-                            end
-
-                            current = word
-                        end
+                        game.stack:pop()
                     end
-
-                    if current
-                        ~= "" then
-
-                        lines[
-                            #lines + 1
-                        ] = current
-                    end
-
-                    if #lines == 0 then
-                        lines[1] = "unknown"
-                    end
-
-                    return lines
                 end
 
-
-                local function buildLines()
+                function self:draw()
 
                     local active =
                         RendererManager.getActive
@@ -144,100 +87,6 @@ function PorygonalOptions.install(
                         and info.porygonalVersion
                         or "unknown"
 
-                    local lines = {
-                        "-PORYGONAL:",
-                        " V" .. text(
-                            porygonalVersion
-                        ),
-                        "-ADAPTER:"
-                    }
-
-                    local wrappedTarget =
-                        wrapWords(
-                            targetName,
-                            16
-                        )
-
-                    for _, line in ipairs(
-                        wrappedTarget
-                    ) do
-
-                        lines[
-                            #lines + 1
-                        ] = " " .. line
-                    end
-
-                    lines[
-                        #lines + 1
-                    ] = " V" .. text(
-                        adapterVersion
-                    )
-
-                    lines[
-                        #lines + 1
-                    ] = "-TESTED ON MOD:"
-
-                    lines[
-                        #lines + 1
-                    ] = " V" .. text(
-                        validatedVersion
-                    )
-
-                    return lines
-                end
-
-
-                function self:update(dt)
-
-                    local lines =
-                        buildLines()
-
-                    local visibleLines = 6
-
-                    local maxScroll =
-                        math.max(
-                            1,
-                            #lines
-                            - visibleLines
-                            + 1
-                        )
-
-                    if game.input:wasPressed(
-                        "up"
-                    ) then
-
-                        self.scroll =
-                            math.max(
-                                1,
-                                self.scroll - 1
-                            )
-                    end
-
-                    if game.input:wasPressed(
-                        "down"
-                    ) then
-
-                        self.scroll =
-                            math.min(
-                                maxScroll,
-                                self.scroll + 1
-                            )
-                    end
-
-                    if game.input:wasPressed(
-                        "b"
-                    ) then
-
-                        game.stack:pop()
-                    end
-                end
-
-
-                function self:draw()
-
-                    local lines =
-                        buildLines()
-
                     Font.drawBox(
                         0,
                         0,
@@ -245,66 +94,62 @@ function PorygonalOptions.install(
                         18
                     )
 
-                    local displayLines =
-                        lines
-
-                    local visibleLines = 6
-
-                    local maxScroll =
-                        math.max(
-                            1,
-                            #displayLines
-                            - visibleLines
-                            + 1
-                        )
-
-                    self.scroll =
-                        math.min(
-                            self.scroll,
-                            maxScroll
-                        )
-
-                    for i = 1,
-                        visibleLines do
-
-                        local line =
-                            displayLines[
-                                self.scroll
-                                + i
-                                - 1
-                            ]
-
-                        if line then
-
-                            Font.draw(
-                                line,
-                                16,
-                                16
-                                + (i - 1) * 16
-                            )
-                        end
-                    end
-
-                    if self.scroll > 1 then
-                        Font.draw(
-                            "^",
-                            144,
-                            48
-                        )
-                    end
-
-                    if self.scroll
-                        < maxScroll then
-
-                        Font.draw(
-                            "v",
-                            144,
-                            112
-                        )
-                    end
+                    Font.draw(
+                        "PORYGONAL",
+                        16,
+                        16
+                    )
 
                     Font.draw(
-                        "B:BACK",
+                        "OVERWORLD CHARACTERS",
+                        16,
+                        32
+                    )
+
+                    Font.draw(
+                        "VERSION " ..
+                        text(
+                            porygonalVersion
+                        ),
+                        16,
+                        48
+                    )
+
+                    Font.draw(
+                        "ACTIVE ADAPTER",
+                        16,
+                        64
+                    )
+
+                    Font.draw(
+                        text(
+                            targetName,
+                            "No active adapter"
+                        ),
+                        16,
+                        80
+                    )
+
+                    Font.draw(
+                        "ADAPTER " ..
+                        text(
+                            adapterVersion
+                        ),
+                        16,
+                        96
+                    )
+
+                    Font.draw(
+                        "VALIDATED MOD " ..
+                        text(
+                            validatedVersion
+                        ),
+                        16,
+                        112
+                    )
+
+                    Font.draw(
+                        "B: BACK",
                         16,
                         128
                     )
@@ -335,16 +180,19 @@ function PorygonalOptions.install(
                 )
                 or rows
 
-            rows[#rows + 1] = {
-                id = "porygonal",
-                label = "PORYGONAL",
-                activate = function(currentGame)
-                    mod.ui.push(
-                        currentGame,
-                        SCREEN_ID
-                    )
-                end
-            }
+            mod.ui.insertBefore(
+                rows,
+                "CANCEL",
+                {
+                    label = "PORYGONAL",
+                    onSelect = function()
+                        mod.ui.push(
+                            game,
+                            SCREEN_ID
+                        )
+                    end
+                }
+            )
 
             return rows
         end

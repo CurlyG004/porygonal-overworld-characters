@@ -38,8 +38,6 @@ PotatoVoxelAdapter.info = {
         name = "PotatoVoxel",
         validatedVersion = "1.9.6",
     },
-
-    porygonalVersion = "0.6.2",
 }
 
 

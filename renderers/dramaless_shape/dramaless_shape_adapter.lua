@@ -8,8 +8,6 @@ DramalessShapeAdapter.info = {
         name = "Dramaless Shape",
         validatedVersion = "2.0.3",
     },
-
-    porygonalVersion = "0.6.2",
 }
 
 ----------------------------------------------------------------
