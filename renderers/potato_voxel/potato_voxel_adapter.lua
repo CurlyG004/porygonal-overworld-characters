@@ -449,6 +449,74 @@ function PotatoVoxelAdapter.initialize(
     local originalVoxelDraw =
         Voxel3D.draw
 
+    local metalRenderer = nil
+
+    local function rendersOnMetal()
+
+        if metalRenderer ~= nil then
+            return metalRenderer
+        end
+
+        metalRenderer =
+            false
+
+        local ok,
+              info =
+
+            pcall(
+                love.graphics.getRendererInfo
+            )
+
+        if ok then
+
+            local name =
+                type(info) == "table"
+                and info.name
+                or info
+
+            if type(name) == "string"
+                and name:lower():find(
+                    "metal",
+                    1,
+                    true
+                ) then
+
+                metalRenderer =
+                    true
+            end
+        end
+
+        return metalRenderer
+    end
+
+
+    local function beginBackCull()
+
+        if rendersOnMetal() then
+            love.graphics.setFrontFaceWinding(
+                "cw"
+            )
+        end
+
+        love.graphics.setMeshCullMode(
+            "back"
+        )
+    end
+
+
+    local function endBackCull()
+
+        love.graphics.setMeshCullMode(
+            "none"
+        )
+
+        if rendersOnMetal() then
+            love.graphics.setFrontFaceWinding(
+                "ccw"
+            )
+        end
+    end
+
     local originalBillboardMesh =
         SpriteBillboards.mesh
 
@@ -1921,9 +1989,7 @@ function PotatoVoxelAdapter.initialize(
             return false
         end
 
-        love.graphics.setMeshCullMode(
-            "back"
-        )
+        beginBackCull()
 
         if data.composite
             and data.draws then
@@ -1952,9 +2018,7 @@ function PotatoVoxelAdapter.initialize(
             )
         end
 
-        love.graphics.setMeshCullMode(
-            "none"
-        )
+        endBackCull()
 
         return true
     end
@@ -2400,9 +2464,7 @@ function PotatoVoxelAdapter.initialize(
             return false
         end
 
-        love.graphics.setMeshCullMode(
-            "back"
-        )
+        beginBackCull()
 
         for _, draw in ipairs(
             draws
@@ -2417,9 +2479,7 @@ function PotatoVoxelAdapter.initialize(
             )
         end
 
-        love.graphics.setMeshCullMode(
-            "none"
-        )
+        endBackCull()
 
         return true
     end
@@ -2658,9 +2718,7 @@ function PotatoVoxelAdapter.initialize(
                         )
 
                     if data then
-                        love.graphics.setMeshCullMode(
-                            "back"
-                        )
+                        beginBackCull()
 
                         originalVoxelDraw(
                             data.mesh,
@@ -2671,9 +2729,7 @@ function PotatoVoxelAdapter.initialize(
                             receiveSun
                         )
 
-                        love.graphics.setMeshCullMode(
-                            "none"
-                        )
+                        endBackCull()
 
                         return
                     end
