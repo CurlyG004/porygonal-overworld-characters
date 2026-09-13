@@ -49,6 +49,15 @@ The adapter keeps renderer-specific compatibility behavior isolated from
 Porygonal's character registry, tuning, palettes, and protected asset runtime.
 
 
+METAL / IPHONE COMPATIBILITY
+----------------------------
+
+This Renderer Adapter includes narrowly scoped Metal/iPhone compatibility
+handling for Porygonal 3D character meshes. When Love2D reports the Metal
+graphics backend, Porygonal adjusts front-face winding only around its own
+back-face-culled character draws, then restores the normal graphics state.
+
+
 VERSION POLICY
 --------------
 

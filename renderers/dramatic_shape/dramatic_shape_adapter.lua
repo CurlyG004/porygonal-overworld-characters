@@ -440,6 +440,79 @@ function DramaticShapeAdapter.initialize(
 
 
     ----------------------------------------------------------------
+    -- Metal / iPhone front-face winding compatibility
+    ----------------------------------------------------------------
+
+    local metalRenderer = nil
+
+    local function rendersOnMetal()
+
+        if metalRenderer ~= nil then
+            return metalRenderer
+        end
+
+        metalRenderer =
+            false
+
+        local ok,
+              info =
+
+            pcall(
+                love.graphics.getRendererInfo
+            )
+
+        if ok then
+
+            local name =
+                type(info) == "table"
+                and info.name
+                or info
+
+            if type(name) == "string"
+                and name:lower():find(
+                    "metal",
+                    1,
+                    true
+                ) then
+
+                metalRenderer =
+                    true
+            end
+        end
+
+        return metalRenderer
+    end
+
+
+    local function beginBackCull()
+
+        if rendersOnMetal() then
+            love.graphics.setFrontFaceWinding(
+                "cw"
+            )
+        end
+
+        love.graphics.setMeshCullMode(
+            "back"
+        )
+    end
+
+
+    local function endBackCull()
+
+        love.graphics.setMeshCullMode(
+            "none"
+        )
+
+        if rendersOnMetal() then
+            love.graphics.setFrontFaceWinding(
+                "ccw"
+            )
+        end
+    end
+
+
+    ----------------------------------------------------------------
     -- COMPATIBILITY PROFILES
     ----------------------------------------------------------------
 
@@ -2122,9 +2195,7 @@ function DramaticShapeAdapter.initialize(
             end
 
 
-            love.graphics.setMeshCullMode(
-                "back"
-            )
+            beginBackCull()
 
 
             ------------------------------------------------------------
@@ -2163,9 +2234,7 @@ function DramaticShapeAdapter.initialize(
             end
 
 
-            love.graphics.setMeshCullMode(
-                "none"
-            )
+            endBackCull()
 
 
             return true
@@ -2772,9 +2841,7 @@ function DramaticShapeAdapter.initialize(
             end
 
 
-            love.graphics.setMeshCullMode(
-                "back"
-            )
+            beginBackCull()
 
 
             for _, draw in ipairs(
@@ -2791,9 +2858,7 @@ function DramaticShapeAdapter.initialize(
             end
 
 
-            love.graphics.setMeshCullMode(
-                "none"
-            )
+            endBackCull()
 
 
             return true
@@ -3033,9 +3098,7 @@ function DramaticShapeAdapter.initialize(
 
                     if data then
 
-                        love.graphics.setMeshCullMode(
-                            "back"
-                        )
+                        beginBackCull()
 
 
                         originalVoxelDraw(
@@ -3047,9 +3110,7 @@ function DramaticShapeAdapter.initialize(
                         )
 
 
-                        love.graphics.setMeshCullMode(
-                            "none"
-                        )
+                        endBackCull()
 
 
                         return
@@ -3992,9 +4053,7 @@ function DramaticShapeAdapter.initialize(
                         )
 
 
-                    love.graphics.setMeshCullMode(
-                        "back"
-                    )
+                    beginBackCull()
 
 
                     Voxel3D.draw(
@@ -4005,9 +4064,7 @@ function DramaticShapeAdapter.initialize(
                     )
 
 
-                    love.graphics.setMeshCullMode(
-                        "none"
-                    )
+                    endBackCull()
 
 
                     return true

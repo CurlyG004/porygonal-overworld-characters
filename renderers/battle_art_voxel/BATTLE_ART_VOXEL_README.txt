@@ -51,6 +51,15 @@ states such as Fly are handled at renderer lifecycle points that remain valid
 when the player is temporarily absent from the ordinary character pass.
 
 
+METAL / IPHONE COMPATIBILITY
+----------------------------
+
+This Renderer Adapter includes narrowly scoped Metal/iPhone compatibility
+handling for Porygonal 3D character meshes. When Love2D reports the Metal
+graphics backend, Porygonal adjusts front-face winding only around its own
+back-face-culled character draws, then restores the normal graphics state.
+
+
 VERSION POLICY
 --------------
 

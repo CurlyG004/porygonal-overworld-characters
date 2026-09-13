@@ -50,6 +50,15 @@ renderer/field-FX passes so unrelated native effects continue to use the Target
 Mod's normal behavior.
 
 
+METAL / IPHONE COMPATIBILITY
+----------------------------
+
+This Renderer Adapter includes narrowly scoped Metal/iPhone compatibility
+handling for Porygonal 3D character meshes. When Love2D reports the Metal
+graphics backend, Porygonal adjusts front-face winding only around its own
+back-face-culled character draws, then restores the normal graphics state.
+
+
 VERSION POLICY
 --------------
 
