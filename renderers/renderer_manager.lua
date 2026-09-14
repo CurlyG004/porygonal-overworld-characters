@@ -67,6 +67,15 @@ local CANDIDATES = {
     {
         name = "Battle Art Voxel",
         path = "renderers/battle_art_voxel/battle_art_voxel_adapter.lua"
+    },
+
+    -- Terrarium (a Dramatic Shape Voxel Mod fork).  Its own file rather than
+    -- the Dramatic Shape one because detection is by exact mod id and three
+    -- of the wrapped signatures gained a parameter after 1.8.2; see
+    -- renderers/terrarium/TERRARIUM_README.txt.
+    {
+        name = "Terrarium",
+        path = "renderers/terrarium/terrarium_adapter.lua"
     }
 
 }
