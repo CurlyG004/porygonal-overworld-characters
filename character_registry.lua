@@ -1253,4 +1253,19 @@ end
 end
 
 
+-- Diagonal currently authors Red's on-foot player appearance only. The caller
+-- supplies the exact active native appearance ID, never an image-name guess.
+function Registry.lookupDiagonalAppearance(appearanceId)
+    if type(appearanceId) ~= "string" then return nil end
+    local direction, pose = appearanceId:match("^PORYGONAL_DIAGONAL_([NS][EW])_(%w+)$")
+    if not direction or (pose ~= "idle" and pose ~= "walk1" and pose ~= "walk2") then
+        return nil
+    end
+    local walking = pose ~= "idle"
+    -- East reflects the authored west sheet. walk2 is the other foot, not
+    -- another direction; fixed one-frame sprites carry no native gait flip.
+    local mirror = (direction:sub(2) == "E") ~= (pose == "walk2")
+    return Registry.lookup("SPRITE_RED", walking and 3 or 0, mirror, direction)
+end
+
 return Registry

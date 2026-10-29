@@ -1099,14 +1099,15 @@ function PotatoVoxelAdapter.initialize(
             }
         )
 
-    SpriteBillboards.mesh =
+    local function observeBillboard(original)
+        return
         function(
             def,
             frame
         )
 
             local mesh =
-                originalBillboardMesh(
+                original(
                     def,
                     frame
                 )
@@ -1123,6 +1124,13 @@ function PotatoVoxelAdapter.initialize(
 
             return mesh
         end
+    end
+
+    SpriteBillboards.mesh = observeBillboard(originalBillboardMesh)
+    -- shadowQuad is an alias captured before OWC installs its mesh observer.
+    if type(SpriteBillboards.shadowQuad) == "function" then
+        SpriteBillboards.shadowQuad = observeBillboard(SpriteBillboards.shadowQuad)
+    end
 
 
     ----------------------------------------------------------------
@@ -1147,7 +1155,7 @@ function PotatoVoxelAdapter.initialize(
     ----------------------------------------------------------------
 
     local idleMotionHistory =
-        {}
+        setmetatable({}, {__mode = "k"})
 
 
     ----------------------------------------------------------------
@@ -1318,6 +1326,8 @@ function PotatoVoxelAdapter.initialize(
 
                     local capturedPose = {
                         sprite = sprite,
+                        observedNpc = self,
+                        sourceMap = map,
 
                         px =
                             (vx or self.px or 0)
@@ -1362,9 +1372,11 @@ function PotatoVoxelAdapter.initialize(
                             false
                     }
 
+                    local motionKey = self.def and self.def.owner == "porygonal_ecosystem"
+                        and self or capturedPose.entityKey
                     local previousMotion =
                         idleMotionHistory[
-                            capturedPose.entityKey
+                            motionKey
                         ]
 
                     if previousMotion then
@@ -1385,15 +1397,37 @@ function PotatoVoxelAdapter.initialize(
                             > 0.0001
                     end
 
-                    idleMotionHistory[
-                        capturedPose.entityKey
-                    ] = {
-                        x =
-                            capturedPose.px,
-
-                        z =
-                            capturedPose.py
+                    local motion = {
+                        x = capturedPose.px,
+                        z = capturedPose.py,
+                        sprite = sprite,
+                        mapId = map and map.id,
+                        viewMapId = ctx.state.map and ctx.state.map.id
                     }
+                    -- Reuse per-entity presentation history, never an ID-only
+                    -- association. A new body, appearance or map drops the yaw.
+                    if previousMotion and previousMotion.sprite == sprite
+                        and previousMotion.mapId == motion.mapId
+                        and previousMotion.viewMapId == motion.viewMapId then
+                        motion.flightYaw = previousMotion.flightYaw
+                    end
+                    local segment = self.directMovement
+                    if self.def and self.def.owner == "porygonal_ecosystem"
+                        and self.moving and type(segment) == "table" then
+                        local dx, dz = segment.dx, segment.dy
+                        if type(dx) == "number" and type(dz) == "number"
+                            and dx == dx and dz == dz
+                            and math.abs(dx) < math.huge and math.abs(dz) < math.huge
+                            and math.max(math.abs(dx), math.abs(dz)) > 0.000001 then
+                            -- NPC:update follows this segment, not a final
+                            -- destination guess. Local +Z maps to (sin Y,cos Y).
+                            motion.flightYaw = math.atan2(dx, dz)
+                        end
+                    end
+                    capturedPose.flightYaw = motion.flightYaw
+                    idleMotionHistory[
+                        motionKey
+                    ] = motion
 
                     ctx.poses[
                         #ctx.poses + 1
@@ -1447,6 +1481,11 @@ function PotatoVoxelAdapter.initialize(
     local function facingToYaw(
         facing
     )
+
+        if facing == "NE" then return math.rad(135) end
+        if facing == "NW" then return math.rad(-135) end
+        if facing == "SE" then return math.rad(45) end
+        if facing == "SW" then return math.rad(-45) end
 
         if facing == "left" then
             return math.rad(-90)
@@ -1800,8 +1839,40 @@ function PotatoVoxelAdapter.initialize(
                 p.flip
             )
 
-        local replacement =
-            Registry.lookup(
+        local ecosystemOwned = p.observedNpc and p.observedNpc.def
+            and p.observedNpc.def.owner == "porygonal_ecosystem"
+        local tcgOwned = p.observedNpc and p.observedNpc.def
+            and p.observedNpc.def.tcgNpcId == 0x27
+        local replacement, colors, diagonalAppearance
+        local appearanceId = spriteId
+        if p.isPlayer and p.observedNpc
+            and type(p.observedNpc.hasAppearanceOverride) == "function" then
+            local active, token = p.observedNpc:hasAppearanceOverride()
+            if active and token and token.sprite == p.sprite then
+                appearanceId = token.spriteId
+                if type(Registry.lookupDiagonalAppearance) == "function" then
+                    diagonalAppearance = Registry.lookupDiagonalAppearance(appearanceId)
+                end
+            end
+        end
+        local playerAppearance = CharacterRuntime.playerAppearanceReplacementFor(
+            appearanceId, mirror, p.facing, p.isPlayer
+        )
+        if diagonalAppearance then
+            replacement, colors = diagonalAppearance, p.colors
+        elseif playerAppearance then
+            replacement, colors = playerAppearance, p.colors
+        elseif tcgOwned then
+            replacement, colors = CharacterRuntime.tcgReplacementFor(
+                p.observedNpc, p.phase, mirror, p.facing, p.sprite, p.colors
+            )
+        elseif ecosystemOwned then
+            -- No body association survives a frame or bypasses the public API.
+            replacement, colors = CharacterRuntime.ecosystemReplacementFor(
+                p.observedNpc, p.phase, mirror, p.facing, p.sprite
+            )
+        else
+            replacement = Registry.lookup(
                 spriteId,
                 frame,
                 mirror,
@@ -1820,6 +1891,8 @@ function PotatoVoxelAdapter.initialize(
                         p.sprite.def.image
                 }
             )
+            colors = p.colors
+        end
 
         if not replacement then
             return nil
@@ -1828,12 +1901,16 @@ function PotatoVoxelAdapter.initialize(
         local y =
             (p.gh or 0)
             + (p.lift or 0)
+            + (replacement.offsetY or 0)
 
         local yaw =
             facingToYaw(
                 replacement.facing
                 or p.facing
             )
+        if replacement.flight_heading and p.flightYaw ~= nil then
+            yaw = p.flightYaw
+        end
 
         local baseModel =
             Mat4.mul(
@@ -1946,12 +2023,20 @@ function PotatoVoxelAdapter.initialize(
             return nil
         end
 
-        local loaded =
-            loadAsset(
-                replacement.asset,
-                p.sprite,
-                p.colors
-            )
+        local loaded
+        if ecosystemOwned or playerAppearance or diagonalAppearance or tcgOwned then
+            -- Recover only asset preparation failures. Draw/structural errors
+            -- still propagate through the adapter's normal render boundary.
+            if p.ecosystemPrepared ~= nil then
+                loaded = p.ecosystemPrepared or nil
+            else
+                local ok, result = pcall(loadAsset, replacement.asset, p.sprite, colors)
+                loaded = ok and result or nil
+                p.ecosystemPrepared = loaded or false
+            end
+        else
+            loaded = loadAsset(replacement.asset, p.sprite, colors)
+        end
 
         if not loaded then
             return nil
@@ -1965,7 +2050,8 @@ function PotatoVoxelAdapter.initialize(
         return {
             mesh = mesh,
             texture = loaded.texture,
-            model = baseModel
+            model = baseModel,
+            cast_shadow = replacement.cast_shadow
         }
     end
 
@@ -2529,6 +2615,10 @@ function PotatoVoxelAdapter.initialize(
             return false
         end
 
+        -- Only suppress a native caster after the replacement has prepared
+        -- successfully; missing meshes/GPU resources retain the 2D fallback.
+        if data.cast_shadow == false then return true end
+
         if data.composite
             and data.draws then
 
@@ -2556,6 +2646,32 @@ function PotatoVoxelAdapter.initialize(
     end
 
 
+    -- A billboard is cached by image/frame, not by NPC. Match the submitted
+    -- card's foot center to the observed native pose instead of counting draws
+    -- (sun refreshes, reflections and first-person passes can skip/repeat them).
+    -- Ambiguous overlapping cards retain their native representation.
+    local function poseForBillboard(info, ctx, model, shadow)
+        if type(model) ~= "table" then return nil end
+        local x = model[4] + 8 * model[1]
+        local y = model[8] + 8 * model[5]
+        local z = model[12] + 8 * model[9]
+        local match
+        for _, p in ipairs(ctx.poses) do
+            if p.sprite.def.image == info.def.image then
+                local expected = Mat4.translate(p.px + 8,
+                    (p.gh or 0) + (p.lift or 0), p.py + 8)
+                if shadow then expected = ShadowMap.snug(expected) end
+                if math.abs(x - expected[4]) < 0.001
+                    and math.abs(y - expected[8]) < 0.001
+                    and math.abs(z - expected[12]) < 0.001 then
+                    if match then return nil end
+                    match = p
+                end
+            end
+        end
+        return match
+    end
+
     ShadowMap.draw =
         function(
             mesh,
@@ -2570,6 +2686,14 @@ function PotatoVoxelAdapter.initialize(
 
             local ctx =
                 renderContext
+
+            if info and ctx and type(model) == "table" then
+                -- ShadowMap.snug returns a shared scratch matrix. Matching
+                -- calls snug again; retain the original fallback transform.
+                local copy = {}
+                for i = 1, 16 do copy[i] = model[i] end
+                model = copy
+            end
 
             if ctx
                 and ctx.flyActive
@@ -2608,47 +2732,19 @@ function PotatoVoxelAdapter.initialize(
             if info
                 and ctx then
 
-                local count =
-                    #ctx.poses
+                local p = poseForBillboard(info, ctx, model, true)
+                if p then
+                    if ctx.flyActive
+                        and p.isPlayer then
 
-                if count > 0 then
+                        return
+                    end
 
-                    ctx.shadowDrawIndex =
-                        (ctx.shadowDrawIndex or 0)
-                        + 1
+                    if drawPorygonalShadow(
+                        p
+                    ) then
 
-                    local poseIndex =
-                        (
-                            (
-                                ctx.shadowDrawIndex
-                                - 1
-                            )
-                            % count
-                        )
-                        + 1
-
-                    local p =
-                        ctx.poses[
-                            poseIndex
-                        ]
-
-                    if p
-                        and p.sprite
-                        and p.sprite.def
-                        and p.sprite.def == info.def then
-
-                        if ctx.flyActive
-                            and p.isPlayer then
-
-                            return
-                        end
-
-                        if drawPorygonalShadow(
-                            p
-                        ) then
-
-                            return
-                        end
+                        return
                     end
                 end
             end
@@ -2668,8 +2764,7 @@ function PotatoVoxelAdapter.initialize(
     --   * are meshes produced by SpriteBillboards.mesh
     --   * reach Voxel3D.draw with a non-nil sunModel
     --
-    -- PotatoVoxelAdapter calls these visible characters in pose order. We use
-    -- the captured pose sequence and verify sprite.def before replacing.
+    -- Match each submitted card to its observed native pose and position.
     ----------------------------------------------------------------
 
     Voxel3D.draw =
@@ -2738,47 +2833,19 @@ function PotatoVoxelAdapter.initialize(
                 and ctx
                 and sunModel ~= nil then
 
-                local count =
-                    #ctx.poses
+                local p = poseForBillboard(info, ctx, model, false)
+                if p then
+                    if ctx.flyActive
+                        and p.isPlayer then
 
-                if count > 0 then
+                        return
+                    end
 
-                    ctx.characterDrawIndex =
-                        (ctx.characterDrawIndex or 0)
-                        + 1
+                    if drawPorygonal(
+                        p
+                    ) then
 
-                    local poseIndex =
-                        (
-                            (
-                                ctx.characterDrawIndex
-                                - 1
-                            )
-                            % count
-                        )
-                        + 1
-
-                    local p =
-                        ctx.poses[
-                            poseIndex
-                        ]
-
-                    if p
-                        and p.sprite
-                        and p.sprite.def
-                        and p.sprite.def == info.def then
-
-                        if ctx.flyActive
-                            and p.isPlayer then
-
-                            return
-                        end
-
-                        if drawPorygonal(
-                            p
-                        ) then
-
-                            return
-                        end
+                        return
                     end
                 end
             end
@@ -2795,8 +2862,367 @@ function PotatoVoxelAdapter.initialize(
 
 
     ----------------------------------------------------------------
+    -- Native presentations are not included in VoxelScene.posesOf().
+    -- endScene is reached once per successfully opened view, after the
+    -- world's depth-writing passes. Never use beginScene or another canvas.
+    ----------------------------------------------------------------
+    if type(Voxel3D.endScene) == "function"
+        and type(Voxel3D.beginOverlay) == "function"
+        and type(Voxel3D.project) == "function" then
+        local PresentationEntries = require("src.render.PresentationEntries")
+        local originalEndScene = Voxel3D._owcPresentationEndScene or Voxel3D.endScene
+        Voxel3D._owcPresentationEndScene = originalEndScene
+
+        local function presentationSource(state, entry)
+            local actor = entry.actor
+            local map = state.map
+            if entry.neighbor then
+                map = nil
+                for _, neighbor in ipairs(state.neighbors or {}) do
+                    if neighbor.map.id == actor.mapId
+                        and neighbor.ox == entry.ox and neighbor.oy == entry.oy then
+                        map = neighbor.map
+                        break
+                    end
+                end
+            end
+            if not map or actor.mapId ~= map.id then return nil end
+            for _, observed in ipairs(state.presentations and state.presentations[map.id] or {}) do
+                if observed == actor then return map end
+            end
+        end
+
+        local function groundFor(map, actor)
+            return VoxelScene.groundAt(map, math.floor(actor.px / 16),
+                math.floor(actor.py / 16)) or 0
+        end
+
+        local ballOrigins = setmetatable({}, {__mode = "k"})
+
+        local function prepareBall(map, entry, replacement, colors, castingBall, facing)
+            if entry.layer or not replacement then return nil end
+            local actor = entry.actor
+            local geometry = actor.sprite:getFrameGeometry(actor.frameIndex or 0)
+            local loaded = loadAsset(replacement.asset, actor.sprite, colors)
+            if not loaded then return nil end
+            if replacement.shakeOffsetXByFrame then
+                -- Use only the native logical frame, including SUCCESS's held
+                -- final right pose. No projectile history or local clock.
+                local dx = replacement.shakeOffsetXByFrame[actor.frameIndex]
+                if dx == nil or #loaded.package.vertices == 0 then return nil end
+                local angle = -dx / 3.097192
+                local c, s = math.cos(angle), math.sin(angle)
+                -- Support the rotated mesh on the source terrain. Its authored
+                -- central pivot is retained; the small faceted support-height
+                -- adjustment avoids sinking either tilted pose into the floor.
+                local minY = math.huge
+                for _, vertex in ipairs(loaded.package.vertices) do
+                    minY = math.min(minY, s * vertex[1] + c * vertex[2])
+                end
+                -- Native px/py is the cell origin. Center the ground Ball's
+                -- pivot on that cell, independently of the 2D sprite anchor.
+                local model = Mat4.mul(Mat4.translate(
+                    actor.px + entry.ox + 8 + dx,
+                    groundFor(map, actor) + actor.visualElevation * 16 - minY,
+                    actor.py + entry.oy + 8), {
+                        c, -s, 0, 0,
+                        s, c, 0, 0,
+                        0, 0, 1, 0,
+                        0, 0, 0, 1})
+                return {mesh = loaded.gpu.mesh, texture = loaded.texture, model = model}
+            end
+            -- SpriteRenderer's world anchor is (px+8, py+12). Align the
+            -- centered Maya mesh with the native frame CENTER, not its feet.
+            -- No mesh-minY offset, trajectory or native mutation.
+            local model = Mat4.translate(
+                actor.px + entry.ox + 8 + geometry.width / 2 - geometry.anchorX,
+                groundFor(map, actor) + actor.visualElevation * 16
+                    + geometry.anchorY - geometry.height / 2,
+                actor.py + entry.oy + 12)
+            -- Held X/Z already include Ecosystem's directional hand offsets
+            -- (left +4px, right -4px). Mirroring again would swap hands twice.
+            -- Apply the registry's visual calibration in world axes; native
+            -- position/elevation and 2D fallback remain untouched.
+            if not castingBall then
+                local offsetX = replacement.offsetXByFacing and replacement.offsetXByFacing[facing] or 0
+                local offsetZ = replacement.offsetZByFacing and replacement.offsetZByFacing[facing] or 0
+                model = Mat4.mul(model, Mat4.translate(offsetX, replacement.offsetY or 0, offsetZ))
+                return {mesh = loaded.gpu.mesh, texture = loaded.texture, model = model}
+            end
+            local origin = ballOrigins[actor]
+            if not origin then
+                origin = {x = actor.px, z = actor.py}
+                ballOrigins[actor] = origin
+            end
+            -- ThrowController's horizontal path is linear. Distance from the
+            -- first observed position gives a sampling-independent roll, with
+            -- no wall clock (so pause and stereo views cannot advance it).
+            local dx, dz = actor.px - origin.x, actor.py - origin.z
+            local distance = math.sqrt(dx * dx + dz * dz)
+            if distance > 0 then
+                -- Authored Maya radius, world pixels; visual rolling rate only.
+                local angle = -distance / 3.097192
+                local x, z = dz / distance, -dx / distance
+                local c, s = math.cos(angle), math.sin(angle)
+                local t = 1 - c
+                -- Right-handed axis = up cross travel, reversed angular sign.
+                -- T * R leaves its authored central origin fixed.
+                model = Mat4.mul(model, {
+                    c + x*x*t, -z*s, x*z*t, 0,
+                    z*s, c, -x*s, 0,
+                    z*x*t, x*s, c + z*z*t, 0,
+                    0, 0, 0, 1})
+            end
+            return {mesh = loaded.gpu.mesh, texture = loaded.texture, model = model}
+        end
+
+        local function ballPresentations(ctx)
+            if ctx.ballItems then return ctx.ballItems end
+            local before, spatial, after = PresentationEntries.collect(ctx.state)
+            local items, active, aims = {}, {}, {}
+            for _, list in ipairs({before, spatial, after}) do
+                for _, source in ipairs(list) do
+                    local map = presentationSource(ctx.state, source)
+                    if map then
+                        -- PresentationEntries uses a shared pool. Keep our own
+                        -- frame snapshot across shadow, eye and recovery draws.
+                        local entry = {}
+                        for k, v in pairs(source) do entry[k] = v end
+                        local actor = entry.actor
+                        local aim = aims[actor]
+                        if not aim and entry.layer
+                            and type(CharacterRuntime.captureAimReplacementFor) == "function" then
+                            local recognized, replacement, colors = pcall(
+                                CharacterRuntime.captureAimReplacementFor, map.id, actor.id, actor,
+                                colorsForMap(ctx.paletteFor, map))
+                            if recognized and replacement then
+                                local prepared, data = pcall(function()
+                                    local loaded = loadAsset(replacement.asset, actor.sprite, colors)
+                                    if not loaded or #loaded.package.vertices == 0
+                                        or #loaded.package.indices == 0 then return nil end
+                                    -- Native XY is a 16px cell origin. The aim's
+                                    -- centered X/Z pivot belongs at its center,
+                                    -- not SpriteRenderer's py+12 draw anchor.
+                                    return {mesh = loaded.gpu.mesh, texture = loaded.texture,
+                                        model = Mat4.translate(actor.px + entry.ox + 8,
+                                            groundFor(map, actor) + actor.visualElevation * 16
+                                                + replacement.offsetY,
+                                            actor.py + entry.oy + 8)}
+                                end)
+                                aim = {data = prepared and data or nil}
+                                aims[actor] = aim
+                            end
+                        end
+                        local selected, replacement, colors, castingBall = false
+                        if type(CharacterRuntime.captureBallReplacementFor) == "function" then
+                            selected, replacement, colors, castingBall = pcall(
+                                CharacterRuntime.captureBallReplacementFor, map.id, actor.id, actor)
+                        end
+                        local prepared, data = pcall(prepareBall, map, entry,
+                            selected and replacement or nil, colors, selected and castingBall,
+                            ctx.state.player and ctx.state.player.facing)
+                        items[#items + 1] = {map = map, entry = entry,
+                            castingBall = selected and castingBall,
+                            aim = aim,
+                            data = prepared and data or nil}
+                        if prepared and data then active[actor] = ballOrigins[actor] end
+                    end
+                end
+            end
+            ballOrigins = setmetatable(active, {__mode = "k"})
+            ctx.ballItems = items
+            return items
+        end
+
+        -- Both native aim layers share one replacement and one solar caster.
+        local function presentationCaster(item, seen)
+            if item.aim then
+                if seen[item.aim] then return nil end
+                seen[item.aim] = true
+                return item.aim.data
+            end
+            return item.castingBall and item.data or nil
+        end
+
+        local function ballSignature(ctx, sig)
+            local parts, seen = {}, {}
+            for _, item in ipairs(ballPresentations(ctx)) do
+                local data = presentationCaster(item, seen)
+                if data then
+                    parts[#parts + 1] = tostring(data.mesh)
+                    parts[#parts + 1] = tostring(data.texture)
+                    for i = 1, 16 do parts[#parts + 1] = tostring(data.model[i]) end
+                end
+            end
+            -- No suffix when absent: retain PotatoVoxel's original cache keys.
+            return #parts == 0 and sig or sig .. "|owc-balls:" .. table.concat(parts, ",")
+        end
+
+        -- Store dispatch on this PotatoVoxel module instance: repeated OWC
+        -- initialization replaces callbacks, never stacks these two wrappers.
+        -- A full mod reload creates fresh module tables and fresh dispatch.
+        if type(ShadowMap.stale) == "function" and type(ShadowMap.finish) == "function" then
+            local hooks = ShadowMap._owcCaptureBalls
+            if not hooks then
+                hooks = {stale = ShadowMap.stale, finish = ShadowMap.finish}
+                ShadowMap._owcCaptureBalls = hooks
+                ShadowMap.stale = function(sig, sprites)
+                    return hooks.stale(sprites and hooks.signature(sig) or sig, sprites)
+                end
+                ShadowMap.finish = function(sig, sprites)
+                    if sprites then
+                        hooks.cast()
+                        sig = hooks.signature(sig)
+                    end
+                    return hooks.finish(sig, sprites)
+                end
+            end
+            hooks.signature = function(sig)
+                return renderContext and ballSignature(renderContext, sig) or sig
+            end
+            hooks.cast = function()
+                if not renderContext then return end
+                -- VoxelScene reaches finish only inside its open actor pass.
+                -- Its caller owns begin/finish/abort and the light rig.
+                local casting, seen = false, {}
+                for _, item in ipairs(ballPresentations(renderContext)) do
+                    local data = presentationCaster(item, seen)
+                    if data then
+                        if not casting then ShadowMap.sprites(true); casting = true end
+                        if not pcall(originalShadowDraw, data.mesh, data.texture, data.model) then
+                            item.data = nil
+                            if item.aim then item.aim.data = nil end
+                        end
+                    end
+                end
+                if casting then ShadowMap.sprites(false) end
+            end
+        end
+
+        local function projectedDraw(map, entry, shadow)
+            local actor = entry.actor
+            local offsetX = shadow and (actor.groundShadowOffsetX or 0) or 0
+            local offsetY = shadow and (actor.groundShadowOffsetY or 0) or 0
+            local elevation = shadow and 0 or actor.visualElevation * 16
+            local x, y, scale = Voxel3D.project(
+                actor.px + entry.ox + 8 + offsetX,
+                groundFor(map, actor) + elevation,
+                actor.py + entry.oy + 12 + offsetY)
+            if not x then return end
+            love.graphics.push("all")
+            local ok, err = pcall(function()
+                love.graphics.translate(x, y)
+                local pixels = (Voxel3D.cell or 1) * (scale or 1)
+                love.graphics.scale(pixels, pixels)
+                local camX = actor.px + 8 + offsetX
+                local camY = actor.py + 12 + offsetY - elevation
+                if shadow then actor:drawGroundShadow(camX, camY)
+                elseif entry.layer then actor:drawLayer(entry.layer, camX, camY)
+                else actor:draw(camX, camY) end
+            end)
+            love.graphics.pop()
+            if not ok then error(err) end
+        end
+
+        Voxel3D.endScene = function(...)
+            local ctx = renderContext
+            if ctx and ctx.state.presentations then
+                local items = ballPresentations(ctx)
+                local fallback, shadows, seen, drawnAims = {}, {}, {}, {}
+                love.graphics.push("all")
+                local ok, err = pcall(function()
+                    Voxel3D.depth("test")
+                    Voxel3D.seams(false)
+                    Voxel3D.glass(false)
+                    for _, item in ipairs(items) do
+                        local map, entry = item.map, item.entry
+                        local actor = entry.actor
+                        if actor.groundShadow and not item.castingBall
+                            and not seen[actor] then
+                            shadows[#shadows + 1] = {map, entry}
+                            seen[actor] = true
+                        end
+                        -- Preparation failures leave the native draw available.
+                        local data = item.aim and item.aim.data or item.data
+                        local drawn = item.aim and drawnAims[actor] or false
+                        if data and not drawn then
+                            beginBackCull()
+                            drawn = pcall(originalVoxelDraw, data.mesh, data.texture,
+                                data.model, 0, data.model)
+                            endBackCull()
+                            if not drawn then
+                                -- The sun may already contain this mesh.
+                                -- Discard this view and retry the existing
+                                -- scene with this replacement excluded.
+                                item.data = nil
+                                if item.aim then item.aim.data = nil end
+                                ctx.ballRetry = true
+                            end
+                        end
+                        if item.aim then drawnAims[actor] = drawn end
+                        if not drawn then
+                            fallback[#fallback + 1] = {map, entry}
+                        end
+                    end
+                    -- Same projected 2D policy as WorldFeature's native FX.
+                    -- Only successfully submitted meshes omit their native sprite.
+                    -- Identified projectile/shake Balls never restore the old 2D shadow.
+                    if #fallback > 0 or #shadows > 0 then
+                        if not Voxel3D.beginOverlay() then
+                            error("Could not restore native presentation overlay")
+                        end
+                        for _, item in ipairs(shadows) do projectedDraw(item[1], item[2], true) end
+                        for _, item in ipairs(fallback) do
+                            projectedDraw(item[1], item[2], false)
+                        end
+                    end
+                end)
+                Voxel3D.seams(true)
+                Voxel3D.glass(true)
+                love.graphics.pop()
+                if not ok then
+                    -- Structural native/scene failures must not become a
+                    -- successful canvas with silently missing presentations.
+                    pcall(originalEndScene)
+                    error(err)
+                end
+            end
+            return originalEndScene(...)
+        end
+    end
+
+    ----------------------------------------------------------------
     -- Frame boundary / pose observation.
     ----------------------------------------------------------------
+
+    local function visibleEcosystemActors(list, ghosts)
+        local filtered
+        for i, entry in ipairs(list or {}) do
+            local actor = ghosts and entry.npc or entry
+            local hidden = actor and actor.def
+                and actor.def.owner == "porygonal_ecosystem"
+                and actor.visible == false
+            if hidden and not filtered then
+                filtered = {}
+                for j = 1, i - 1 do filtered[j] = list[j] end
+            elseif not hidden and filtered then
+                filtered[#filtered + 1] = entry
+            end
+        end
+        return filtered or list
+    end
+
+    local function visibleScene(state)
+        if not state then return state end
+        local entities = visibleEcosystemActors(state.entities, false)
+        local ghosts = visibleEcosystemActors(state.ghosts, true)
+        if entities == state.entities and ghosts == state.ghosts then return state end
+        -- PotatoVoxel 1.9.6 collects NPC:pose() even when visible is false.
+        -- Supply a render-only view before collection, so every pass (including
+        -- fallback cards and shadows) respects the exact native actor's flag.
+        -- Never edit the gameplay lists, NPC visibility, or capture lifecycle.
+        return setmetatable({entities = entities, ghosts = ghosts}, {__index = state})
+    end
 
     VoxelScene.render =
         function(
@@ -2808,7 +3234,7 @@ function PotatoVoxelAdapter.initialize(
             paletteFor,
             eyes
         )
-
+            state = visibleScene(state)
             ------------------------------------------------------------
             -- Porygonal Fly state machine.
             ------------------------------------------------------------
@@ -3012,8 +3438,6 @@ function PotatoVoxelAdapter.initialize(
 
             local ctx = {
                 poses = {},
-                characterDrawIndex = 0,
-                shadowDrawIndex = 0,
 
                 state = state,
                 paletteFor = paletteFor,
@@ -3108,6 +3532,14 @@ function PotatoVoxelAdapter.initialize(
             -- Run PotatoVoxelAdapter normally.
             ------------------------------------------------------------
 
+            -- Retire history as soon as a native body leaves the scene, even
+            -- if another owner still retains its table for later reuse.
+            for key in pairs(idleMotionHistory) do
+                if type(key) == "table" and not alreadyWrapped[key] then
+                    idleMotionHistory[key] = nil
+                end
+            end
+
             local ok,
                   resultA,
                   resultB,
@@ -3123,6 +3555,19 @@ function PotatoVoxelAdapter.initialize(
                     paletteFor,
                     eyes
                 )
+
+            -- A late GPU draw error must not publish a canvas containing a
+            -- ball's shadow alongside its 2D fallback. Re-enter only the
+            -- existing scene renderer, with failed replacements removed from
+            -- both its actor signature and visible draws. Each retry removes
+            -- at least one replacement; ordinary frames never take this path.
+            while ok and ctx.ballRetry do
+                ctx.ballRetry = false
+                ctx.poses = {}
+                ctx.flyVisibleDrawn, ctx.flyShadowDrawn = false, false
+                ok, resultA, resultB, resultC = pcall(originalVoxelRender,
+                    state, w, h, vw, vh, paletteFor, eyes)
+            end
 
 
             ------------------------------------------------------------

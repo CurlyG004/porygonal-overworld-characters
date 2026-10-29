@@ -12,7 +12,7 @@
   "game_version": "0.0.0-dev || >=0.1.37 <2.0.0",
   "priority": 110,
   "dependencies": [],
-  "optional_dependencies": [],
+  "optional_dependencies": ["porygonal_ecosystem"],
   "conflicts": [],
   "permissions": [
     "engine_internals"

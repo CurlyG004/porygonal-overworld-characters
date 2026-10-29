@@ -764,6 +764,101 @@ assert(
 
     local assetCache = {}
 
+    local EcosystemRegistry = loadLocalModule("ecosystem_registry.lua")
+    assert(EcosystemRegistry, "Could not load Ecosystem visual registry")
+    local TcgRegistry = loadLocalModule("tcg_registry.lua")
+
+    local function denseArray(value)
+        if type(value) ~= "table" then return false end
+        local count = #value
+        if count == 0 then return false end
+        local entries = 0
+        for key in pairs(value) do
+            if type(key) ~= "number" or key % 1 ~= 0
+                or key < 1 or key > count then return false end
+            entries = entries + 1
+        end
+        return entries == count
+    end
+
+    local function finite(value)
+        return type(value) == "number" and value == value
+            and value ~= math.huge and value ~= -math.huge
+    end
+
+    local function loadLuaMesh(path, registry)
+        if not registry or not registry.allowsMesh(path) then return nil end
+        -- The injected local loader compiles with Gen1Recomp's sandboxed load.
+        local ok, data = pcall(loadLocalModule, path)
+        if not ok or type(data) ~= "table"
+            or not denseArray(data.vertices) or not denseArray(data.indices)
+            or #data.indices % 3 ~= 0 then return nil end
+        for _, vertex in ipairs(data.vertices) do
+            if not denseArray(vertex) or #vertex ~= 6 then return nil end
+            for i = 1, 6 do
+                if not finite(vertex[i]) then return nil end
+            end
+        end
+        for _, index in ipairs(data.indices) do
+            if not finite(index) or index % 1 ~= 0
+                or index < 1 or index > #data.vertices then return nil end
+        end
+        return data
+    end
+
+    local function ecosystemReplacementFor(npc, phase, mirror, facing, observedSprite)
+        if not npc or type(npc.mapId) ~= "string" or type(npc.id) ~= "string"
+            or not npc.def or npc.def.owner ~= "porygonal_ecosystem"
+            or type(mod.find) ~= "function" then return nil end
+        local ok, ecosystem = pcall(mod.find, "porygonal_ecosystem")
+        local query = ok and ecosystem and ecosystem.exports
+            and ecosystem.exports.creatureVisualData
+        if type(query) ~= "function" then return nil end
+        local valid, visual = pcall(query, npc.mapId, npc.id, npc)
+        if not valid or type(visual) ~= "table"
+            or visual.mapId ~= npc.mapId or visual.npcId ~= npc.id
+            or type(visual.colors) ~= "table" then return nil end
+        for i = 1, 4 do
+            local color = visual.colors[i]
+            if type(color) ~= "table" then return nil end
+            for j = 1, 3 do
+                if not finite(color[j]) or color[j] < 0 or color[j] > 255 then return nil end
+            end
+        end
+        if observedSprite and npc.sprite ~= observedSprite then return nil end
+        local sprite = observedSprite or npc.sprite
+        return EcosystemRegistry.lookup(visual, phase, mirror, facing,
+            sprite and sprite.def, npc.groundShadow), visual.colors
+    end
+
+    local function captureBallReplacementFor(mapId, presentationId, observed)
+        if type(mapId) ~= "string" or type(presentationId) ~= "string"
+            or type(observed) ~= "table" or observed.mapId ~= mapId
+            or observed.id ~= presentationId or observed.destroyed
+            or type(mod.find) ~= "function" then return nil end
+        local ok, ecosystem = pcall(mod.find, "porygonal_ecosystem")
+        local query = ok and ecosystem and ecosystem.exports
+            and ecosystem.exports.captureBallVisualData
+        if type(query) ~= "function" then return nil end
+        local valid, visual = pcall(query, mapId, presentationId, observed)
+        if not valid or type(visual) ~= "table" or visual.mapId ~= mapId
+            or visual.presentationId ~= presentationId then return nil end
+        -- Identity is independent of replacement readiness, including palette failure.
+        local castingBall = visual.role == "projectile" or visual.role == "shake"
+        if not denseArray(visual.colors) or #visual.colors ~= 4 then
+            return nil, nil, castingBall
+        end
+        for _, color in ipairs(visual.colors) do
+            if not denseArray(color) or #color ~= 3 then return nil, nil, castingBall end
+            for _, value in ipairs(color) do
+                if not finite(value) or value < 0 or value > 255 then
+                    return nil, nil, castingBall
+                end
+            end
+        end
+        return EcosystemRegistry.lookupCaptureBall(visual), visual.colors, castingBall
+    end
+
 
     ----------------------------------------------------------------
     -- Load texture ImageData
@@ -879,6 +974,37 @@ local function resolveCharacterColors(
         colors
     )
 end
+
+
+    local function tcgReplacementFor(npc, phase, mirror, facing, sprite, colors)
+        local def = npc and npc.def
+        if not TcgRegistry or not def or def.tcgNpcId ~= 0x27
+            or def.name ~= "PORYGONAL_TCG_BRITTANY"
+            or def.sprite ~= "SPRITE_TCG_GIRL_BLUE"
+            or type(npc.mapId) ~= "string" or type(def.index) ~= "number"
+            or npc.id ~= npc.mapId .. "_obj_" .. def.index
+            or npc.destroyed or npc.visible == false or npc.sprite ~= sprite
+            or not sprite or not sprite.def or sprite.def.walker ~= true
+            or sprite.def.frames ~= 6
+            or sprite.def.paletteSource ~= "ROM:SpriteSheetPointerTable[1]"
+            or type(mod.find) ~= "function" or not mod.world
+            or type(mod.world.npc) ~= "function" then return nil end
+        local ok, tcg = pcall(mod.find, "PORYGONAL_TCG")
+        if not ok or not tcg then return nil end
+        -- Public native lookup checks the current pool, including neighbor maps.
+        -- Compare bodies so a stale captured pose cannot replace a rebuilt NPC.
+        local live, handle = pcall(mod.world.npc, mod.world, npc.mapId, def.name)
+        if not live or not handle or handle.npc ~= npc then return nil end
+        local valid, resolved = pcall(resolveCharacterColors, sprite, npc.objPaletteOverride or colors)
+        if not valid or not denseArray(resolved) or #resolved ~= 4 then return nil end
+        for _, color in ipairs(resolved) do
+            if not denseArray(color) or #color ~= 3 then return nil end
+            for _, value in ipairs(color) do
+                if not finite(value) or value < 0 or value > 255 then return nil end
+            end
+        end
+        return TcgRegistry.lookup(phase, mirror, facing), resolved
+    end
 
 
     ----------------------------------------------------------------
@@ -1028,7 +1154,9 @@ end
 
 
         local key =
-            tostring(definition.mesh)
+            tostring(definition.meshSource or "v4") .. "|"
+            .. tostring(definition.paletteMode) .. "|"
+            .. tostring(definition.mesh)
             .. "|"
             .. tostring(definition.texture)
 
@@ -1044,10 +1172,14 @@ end
         end
 
 
-        local meshData =
-            loadProtectedMesh(
-                definition.mesh
-            )
+        local meshData
+        if definition.meshSource == "ecosystem_lua" then
+            meshData = loadLuaMesh(definition.mesh, EcosystemRegistry)
+        elseif definition.meshSource == "tcg_lua" then
+            meshData = loadLuaMesh(definition.mesh, TcgRegistry)
+        elseif definition.meshSource == nil then
+            meshData = loadProtectedMesh(definition.mesh)
+        end
 
 
         if not meshData then
@@ -1289,7 +1421,52 @@ end
     end
 
 
+    -- ENG-T052's one native owner and exact ECO-T041 appearance identify Aim;
+    -- image paths alone cannot establish its identity. No Ball export is used.
+    local function captureAimReplacementFor(mapId, presentationId, observed, colors)
+        if type(observed) ~= "table" or type(presentationId) ~= "string"
+            or not presentationId:match("^porygonal_ecosystem_presentation_%d+$")
+            or observed.id ~= presentationId or observed.mapId ~= mapId
+            or observed.destroyed or observed.visible == false
+            or type(mod.find) ~= "function" then return nil end
+        local ok, ecosystem = pcall(mod.find, "porygonal_ecosystem")
+        if not ok or not ecosystem then return nil end
+        local layers = observed.renderLayers
+        if not denseArray(layers) or #layers ~= 2 then return nil end
+        for i, identity in ipairs({{"ECO_AIM_BACK", "beforeActors"},
+                                   {"ECO_AIM_FRONT", "afterActors"}}) do
+            local layer = layers[i]
+            if type(layer) ~= "table" or layer.spriteId ~= identity[1]
+                or layer.phase ~= identity[2] or layer.index ~= i
+                or not layer.sprite or not layer.sprite.def
+                or layer.sprite.def.paletteSource ~= "ROM:SpriteSheetPointerTable[0]"
+                then return nil end
+        end
+        -- Resolve both native layer sprites with the existing version policy.
+        -- An absent/malformed palette must never select the raw gray texture.
+        if observed.objPaletteOverride then return nil end
+        local resolved = {}
+        for i, layer in ipairs(layers) do
+            resolved[i] = resolveCharacterColors(layer.sprite, colors)
+            if not denseArray(resolved[i]) or #resolved[i] ~= 4 then return nil end
+            for _, color in ipairs(resolved[i]) do
+                if not denseArray(color) or #color ~= 3 then return nil end
+                for _, value in ipairs(color) do
+                    if not finite(value) or value < 0 or value > 255 then return nil end
+                end
+            end
+        end
+        if paletteKey(resolved[1]) ~= paletteKey(resolved[2]) then return nil end
+        return EcosystemRegistry.lookupCaptureAim(), resolved[1]
+    end
+
     return {
+
+        captureAimReplacementFor = captureAimReplacementFor,
+        tcgReplacementFor = tcgReplacementFor,
+        ecosystemReplacementFor = ecosystemReplacementFor,
+        captureBallReplacementFor = captureBallReplacementFor,
+        playerAppearanceReplacementFor = EcosystemRegistry.lookupPlayerAppearance,
 
         loadAsset =
             loadAsset,
